@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Verify Email | Unisphere</title>
+  <style>
+    body { font-family: sans-serif; background: #f0f2f5; padding: 2rem; }
+    .card {
+      background: white; max-width: 500px; margin: auto;
+      padding: 2rem; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.05);
+    }
+    input, button {
+      width: 100%; padding: 10px; margin-top: 10px;
+      border: 1px solid #ccc; border-radius: 6px;
+    }
+    button {
+      background: #1877f2; color: white; border: none;
+      cursor: pointer; font-weight: bold;
+    }
+    button:hover { background: #145dbf; }
+    .error-message {
+      color: #e53e3e;
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+    }
+    .expired-message {
+      color: #e53e3e;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Enter OTP sent to your email</h2>
+    {% if form.non_field_errors %}
+      <p class="expired-message">{{ form.non_field_errors.0 }}</p>
+    {% endif %}
+    <p id="timer-text" style="color:#555; font-size: 0.9rem;"></p>
+    <button id="resend-btn" style="display:none; margin-top: 1rem; background: #38b2ac;">Resend OTP</button>
+    
+    <form method="post" id="otp-form">
+      {% csrf_token %}
+      {{ form.email }}
+      <div class="form-group">
+        <label for="{{ form.otp.id_for_label }}">Enter OTP</label>
+        {{ form.otp }}
+        {% if form.otp.errors %}
+          <div class="error-message">
+            {{ form.otp.errors.0 }}
+          </div>
+        {% endif %}
+      </div>
+      <button type="submit" id="submit-btn">Verify & Complete</button>
+    </form>
+    
+    <p style="margin-top: 1rem; font-size: 0.9rem;">
+      Didn't get it? <a href="{% url 'register' %}">Register again</a>
+    </p>
+  </div>
+
+  <script>
+    let seconds = parseInt("{{ seconds_remaining|default:0 }}");
+    const timerText = document.getElementById('timer-text');
+    const resendBtn = document.getElementById('resend-btn');
+    const otpInput = document.getElementById('{{ form.otp.id_for_label }}');
+    const submitBtn = document.getElementById('submit-btn');
+    const otpForm = document.getElementById('otp-form');
+    let timerInterval;
+
+    function handleExpiration() {
+      timerText.innerHTML = '<span class="expired-message">OTP expired. Please register again.</span>';
+      resendBtn.style.display = 'inline-block';
+      otpInput.disabled = true;
+      submitBtn.disabled = true;
+      clearInterval(timerInterval);
+    }
+
+    function updateTimer() {
+      if (seconds <= 0) {
+        handleExpiration();
+        return;
+      }
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      timerText.innerText = `OTP expires in ${mins}:${secs < 10 ? '0' + secs : secs}`;
+      seconds--;
+    }
+
+    // Check if OTP is already expired from server-side
+    if (document.querySelector('.expired-message')) {
+      handleExpiration();
+    } else {
+      // Start timer only if not expired
+      updateTimer();
+      timerInterval = setInterval(updateTimer, 1000);
+    }
+
+    resendBtn.addEventListener('click', () => {
+      fetch("{% url 'resend_otp' %}", {
+        method: 'POST',
+        headers: {'X-CSRFToken': '{{ csrf_token }}'}
+      }).then(res => {
+        if (res.ok) {
+          seconds = 180; // Reset timer to 3 minutes
+          resendBtn.style.display = 'none';
+          otpInput.disabled = false;
+          submitBtn.disabled = false;
+          otpInput.value = ''; // Clear the OTP input
+          if (timerInterval) clearInterval(timerInterval);
+          updateTimer();
+          timerInterval = setInterval(updateTimer, 1000);
+          timerText.innerHTML = '<span style="color: #38b2ac;">OTP resent! Check your email.</span>';
+        }
+      });
+    });
+
+    // Clear interval when leaving the page
+    window.addEventListener('beforeunload', () => {
+      if (timerInterval) clearInterval(timerInterval);
+    });
+  </script>
+</body>
+</html> 

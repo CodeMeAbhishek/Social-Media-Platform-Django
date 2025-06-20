@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: unisphere
+    env: python
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+      pip install dj-database-url
+      python manage.py collectstatic --no-input
+      python manage.py migrate
+      echo "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@example.com', 'admin123') if not User.objects.filter(username='admin').exists() else None" | python manage.py shell
+    startCommand: |
+      export DJANGO_SETTINGS_MODULE=core.settings
+      daphne -b 0.0.0.0 -p $PORT core.asgi:application
+    envVars:
+      - key: DEBUG
+        value: False
+      - key: SECRET_KEY
+        value: ${SECRET_KEY}
+      - key: EMAIL_HOST_USER
+        value: ${EMAIL_HOST_USER}
+      - key: EMAIL_HOST_PASSWORD
+        value: ${EMAIL_HOST_PASSWORD}
+      - key: DJANGO_SUPERUSER_USERNAME
+        value: ${DJANGO_SUPERUSER_USERNAME}
+      - key: DJANGO_SUPERUSER_EMAIL
+        value: ${DJANGO_SUPERUSER_EMAIL}
+      - key: DJANGO_SUPERUSER_PASSWORD
+        value: ${DJANGO_SUPERUSER_PASSWORD}
+      - key: DJANGO_SETTINGS_MODULE
+        value: core.settings
+      - key: REDIS_URL
+        value: ${REDIS_URL}
+    disk:
+      name: media
+      mountPath: /opt/render/project/src/media
+      sizeGB: 1
+    plan: free
+
+  - type: redis
+    name: unisphere-redis
+    ipAllowList: []
+    plan: free
+
+  - type: postgres
+    name: unisphere-db
+    plan: free 
